@@ -1,5 +1,6 @@
 import torch
 import random
+import math
 import numpy as np
 from collections import deque
 from game import SnakeGameAI, Direction, Point
@@ -62,7 +63,9 @@ class Agent:
             game.food.x < game.head.x,  # food left
             game.food.x > game.head.x,  # food right
             game.food.y < game.head.y,  # food up
-            game.food.y > game.head.y  # food down
+            game.food.y > game.head.y,  # food down
+
+            # math.sqrt((game.food.x - game.head.x) ** 2 + (game.food.y - game.head.y) ** 2) # distance from food
             ]
 
         return np.array(state, dtype=int)

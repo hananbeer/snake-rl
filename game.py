@@ -1,12 +1,13 @@
 import pygame
 import random
+import math
 from enum import Enum
 from collections import namedtuple
 import numpy as np
 
 pygame.init()
-font = pygame.font.Font('arial.ttf', 25)
-#font = pygame.font.SysFont('arial', 25)
+# font = pygame.font.Font('arial.ttf', 25)
+font = pygame.font.SysFont('arial', 25)
 
 class Direction(Enum):
     RIGHT = 1
@@ -70,21 +71,29 @@ class SnakeGameAI:
                 quit()
         
         # 2. move
+        delta_food_before = math.sqrt((self.food.x - self.head.x) ** 2 + (self.food.y - self.head.y) ** 2)
         self._move(action) # update the head
+        delta_food_after = math.sqrt((self.food.x - self.head.x) ** 2 + (self.food.y - self.head.y) ** 2)
         self.snake.insert(0, self.head)
         
         # 3. check if game over
         reward = 0
+
+        delta_food = delta_food_after - delta_food_before
+        
+        # reward += (3 / (delta_food + 1)) ** 2
+        reward -= delta_food
+
         game_over = False
         if self.is_collision() or self.frame_iteration > 100*len(self.snake):
             game_over = True
-            reward = -10
+            reward = -100
             return reward, game_over, self.score
 
         # 4. place new food or just move
         if self.head == self.food:
             self.score += 1
-            reward = 10
+            reward += 50
             self._place_food()
         else:
             self.snake.pop()
