@@ -36,22 +36,22 @@ class Agent:
 
         state = [
             # Danger straight
-            (dir_r and game.is_collision(point_r)) or 
-            (dir_l and game.is_collision(point_l)) or 
-            (dir_u and game.is_collision(point_u)) or 
-            (dir_d and game.is_collision(point_d)),
+            (dir_r and game.is_game_over(point_r)) or 
+            (dir_l and game.is_game_over(point_l)) or 
+            (dir_u and game.is_game_over(point_u)) or 
+            (dir_d and game.is_game_over(point_d)),
 
             # Danger right
-            (dir_u and game.is_collision(point_r)) or 
-            (dir_d and game.is_collision(point_l)) or 
-            (dir_l and game.is_collision(point_u)) or 
-            (dir_r and game.is_collision(point_d)),
+            (dir_u and game.is_game_over(point_r)) or 
+            (dir_d and game.is_game_over(point_l)) or 
+            (dir_l and game.is_game_over(point_u)) or 
+            (dir_r and game.is_game_over(point_d)),
 
             # Danger left
-            (dir_d and game.is_collision(point_r)) or 
-            (dir_u and game.is_collision(point_l)) or 
-            (dir_r and game.is_collision(point_u)) or 
-            (dir_l and game.is_collision(point_d)),
+            (dir_d and game.is_game_over(point_r)) or 
+            (dir_u and game.is_game_over(point_l)) or 
+            (dir_r and game.is_game_over(point_u)) or 
+            (dir_l and game.is_game_over(point_d)),
             
             # Move direction
             dir_l,
