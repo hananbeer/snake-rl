@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>JS-PyTorch Layer Weights Plot</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-pytorch/0.7.2/js-pytorch-browser.js"
+        integrity="sha512-l22t7GnqXvHBMCBvPUBdFO2TEYxnb1ziCGcDQcpTB2un16IPA4FE5SIZ8bUR+RwoDZGikQkWisO+fhnakXt9rg=="
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
+</head>
+<body>
+  <canvas id="weightsCanvas" width="400" height="100"></canvas>
+  <script type="module">
+    // import * as jstorch from 'jspytorch';
+
+    async function plotWeights() {
+      // Create a simple linear layer (1 input, 6 output neurons)
+      const layer = new torch.nn.Linear(1, 6);
+
+      // Randomly initialize weights (for example purposes)
+      // layer.reset_parameters();
+
+      // Get weight tensor and convert to array
+      const weights = layer.W.data[0]
+
+      // Setup canvas
+      const canvas = document.getElementById('weightsCanvas');
+      const ctx = canvas.getContext('2d');
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      // Number of weights
+      const numWeights = weights.length;
+
+      // Maximum weight magnitude for scaling (visualization)
+      const maxWeight = Math.max(...weights.map(Math.abs));
+
+      // Draw each weight as a vertical bar
+      const barWidth = canvasWidth / numWeights;
+
+      weights.forEach((w, i) => {
+        // Height scaled relative to max weight
+        const barHeight = (Math.abs(w) / maxWeight) * canvasHeight;
+
+        // Color depends on sign of weight
+        ctx.fillStyle = w >= 0 ? 'blue' : 'red';
+
+        // Draw bar (y goes from top, so invert)
+        ctx.fillRect(i * barWidth, canvasHeight - barHeight, barWidth - 2, barHeight);
+      });
+    }
+
+    plotWeights();
+  </script>
+</body>
+</html>

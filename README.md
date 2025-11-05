@@ -1,10 +1,47 @@
-# Teach AI To Play Snake! Reinforcement Learning With PyTorch and Pygame
+# Snake
 
-In this Python Reinforcement Learning Tutorial series we teach an AI to play Snake! We build everything from scratch using Pygame and PyTorch. The tutorial consists of 4 parts:
+## requirements
 
-You can find all tutorials on my channel: [Playlist](https://www.youtube.com/playlist?list=PLqnslRFeH2UrDh7vUmJ60YrmWd64mTTKV)
+- fixed seed
 
-- Part 1: I'll show you the project and teach you some basics about Reinforcement Learning and Deep Q Learning.
-- Part 2: Learn how to setup the environment and implement the Snake game.
-- Part 3: Implement the agent that controls the game.
-- Part 4: Implement the neural network to predict the moves and train it.
+
+# different designs:
+
+## simple snake game
+
+- fixed grid
+
+## relative controls
+
+### controls:
+
+- world (up, down, left, right)
+- local (left / right / no-op)
+
+### signals:
+
+- one-hot world vector (up, down, left, right)
+- world direction tuple ([-1..1, -1..1])
+- local direction tuple ([-1..1, -1..1])
+- food axis direction (-1, 1)
+- food distance (-X..X, -Y..Y)
+- food world location (x, y)
+- snake world location (x, y)
+
+
+### food
+
+- single food
+- multiple instances of food
+- multiple kinds of foods, including poisons
+- obstacles like walls?
+
+
+### snake behavior
+
+- non self-colliding
+- self-colliding
+- wall teleport
+- wall is death
+
+

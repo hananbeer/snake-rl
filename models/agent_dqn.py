@@ -3,22 +3,38 @@ import random
 import math
 import numpy as np
 from collections import deque
-from snake import SnakeGame, SnakeGameFrontend, Point, Vector
-from model import Linear_QNet, QTrainer
-from helper import plot
+
+import sys
+import os
+
+from game import SnakeGame, SnakeGameFrontend, Point, Vector
+from .model_simple_layernorm import ModelSimpleLayerNorm
+# from .qtrainer_simple import QTrainerSimple
+from .qtrainer import QTrainer
+
+import signals
+
+import helper
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
 LR = 0.001
+TARGET_UPDATE_FREQUENCY = 15  # Update target network every N games
+EPSILON_START = 0.6
+EPSILON_END = 0.001
+EPSILON_DECAY = 0.995
 
 class Agent:
   def __init__(self):
     self.n_games = 0
-    self.epsilon = 0 # randomness
+    self.epsilon = EPSILON_START # randomness
     self.gamma = 0.9 # discount rate
     self.memory = deque(maxlen=MAX_MEMORY) # popleft()
-    self.model = Linear_QNet(11, 256, 3)
-    self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+    self.model = ModelSimpleLayerNorm(11, 512, 3)
+    self.target_model = ModelSimpleLayerNorm(11, 512, 3)
+    self.target_model.load_state_dict(self.model.state_dict())
+    self.target_model.eval()
+    self.trainer = QTrainer(self.model, self.target_model, lr=LR, gamma=self.gamma)
 
 
   def get_state(self, game):
@@ -34,29 +50,13 @@ class Agent:
     dir_d = game.direction == Vector(0, 1)
 
     state = [
-      # Danger straight
-      (dir_r and game.is_game_over(point_r)) or 
-      (dir_l and game.is_game_over(point_l)) or 
-      (dir_u and game.is_game_over(point_u)) or 
-      (dir_d and game.is_game_over(point_d)),
-
-      # Danger right
-      (dir_u and game.is_game_over(point_r)) or 
-      (dir_d and game.is_game_over(point_l)) or 
-      (dir_l and game.is_game_over(point_u)) or 
-      (dir_r and game.is_game_over(point_d)),
-
-      # Danger left
-      (dir_d and game.is_game_over(point_r)) or 
-      (dir_u and game.is_game_over(point_l)) or 
-      (dir_r and game.is_game_over(point_u)) or 
-      (dir_l and game.is_game_over(point_d)),
+      *signals.get_danger_signals(game),
       
       # Move direction
-      dir_l,
-      dir_r,
-      dir_u,
-      dir_d,
+      *signals.get_direction_bitmap_signals(game),
+
+      # game.direction.x,
+      # game.direction.y,
       
       # Food location 
       game.food.x < game.head.x,  # food left
@@ -64,6 +64,14 @@ class Agent:
       game.food.y < game.head.y,  # food up
       game.food.y > game.head.y,  # food down
 
+
+      # Food location v2
+      # (game.food.x < game.head.x) == (game.direction.x < 0),  # food left
+      # # (game.food.x > game.head.x) == (game.direction.x > 0),  # food right
+      # (game.food.y < game.head.y) == (game.direction.y < 0),  # food up
+      # # (game.food.y > game.head.y) == (game.direction.y > 0),  # food down
+
+      # Food distance
       # math.sqrt((game.food.x - game.head.x) ** 2 + (game.food.y - game.head.y) ** 2) # distance from food
     ]
 
@@ -87,19 +95,34 @@ class Agent:
       self.trainer.train_step(state, action, reward, next_state, done)
 
   def get_action(self, state):
-    # random moves: tradeoff exploration / exploitation
-    self.epsilon = 80 - self.n_games
+    # Exponential epsilon decay for exploration/exploitation tradeoff
     final_move = [0,0,0]
-    if random.randint(0, 200) < self.epsilon:
+    r = random.random()
+    if r < self.epsilon:
       move = random.randint(0, 2)
       final_move[move] = 1
+      # print('random move', r)#, end='\r')
     else:
       state0 = torch.tensor(state, dtype=torch.float)
-      prediction = self.model(state0)
+      self.model.eval()
+      with torch.no_grad():
+        prediction = self.model(state0)
+      self.model.train()
       move = torch.argmax(prediction).item()
       final_move[move] = 1
+      # print('model move', r)#, end='\r')
 
     return final_move
+
+  def update_epsilon(self):
+    # Exponential decay: epsilon = max(epsilon_end, epsilon * decay_rate)
+    self.epsilon = max(EPSILON_END, self.epsilon * EPSILON_DECAY)
+    print('epsilon', self.epsilon)
+
+  def update_target_network(self):
+    # Copy weights from main network to target network
+    self.target_model.load_state_dict(self.model.state_dict())
+    self.target_model.eval()
 
 
 def train(render: bool):
@@ -159,18 +182,31 @@ def train(render: bool):
       game.reset()
       agent.n_games += 1
       agent.train_long_memory()
+      
+      # Update epsilon with exponential decay
+      agent.update_epsilon()
+      
+      # Update target network periodically
+      if agent.n_games % TARGET_UPDATE_FREQUENCY == 0:
+        agent.update_target_network()
+      
+      # Update learning rate scheduler
+      agent.trainer.update_scheduler()
 
-      if score > record:
-        record = score
-        agent.model.save()
+      # if score > record:
+      #   record = score
+      #   agent.model.save()
 
-      print('Game', agent.n_games, 'Score', score, 'Record:', record)
+      print('Game', agent.n_games, 'Score', score, 'Record:', record, 'Epsilon:', f'{agent.epsilon:.3f}')
 
       plot_scores.append(score)
       total_score += score
       mean_score = total_score / agent.n_games
       plot_mean_scores.append(mean_score)
-      plot(plot_scores, plot_mean_scores)
+      helper.plot(plot_scores, plot_mean_scores)
+
+      plot_scores = plot_scores[-200:]
+      plot_mean_scores = plot_mean_scores[-200:]
 
       next_size = 13 + int(mean_score * 4 + 0.8)
       if next_size != game.width:
