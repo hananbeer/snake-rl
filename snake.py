@@ -96,19 +96,26 @@ class SnakeGame:
     ate_food = (next_head == self.food)
     if not ate_food:
       self.snake.pop()
+      if (next_head.x == self.food.x or next_head.y == self.food.y) and not (self.head.x == self.food.x or self.head.y == self.food.y):
+        self.step_reward += 1
+      elif not (next_head.x == self.food.x or next_head.y == self.food.y) and (self.head.x == self.food.x or self.head.y == self.food.y):
+        self.step_reward -= 5
+
+      # dist = math.sqrt((next_head.x - self.food.x) ** 2 + (next_head.y - self.food.y) ** 2)
+      # self.step_reward -= dist - 5
     else:
       self.food = self.make_food()
       self.score += 1
-      self.step_reward += 15
+      self.step_reward += 50
 
     self.snake.insert(0, next_head)
 
     is_game_over = self.is_game_over()
     if is_game_over:
-      self.step_reward -= 100
+      self.step_reward -= 20
 
     self.reward += self.step_reward
-    return ate_food, is_game_over
+    return self.step_reward, is_game_over, self.score
 
 class SnakeGameAI(SnakeGame):
   def world_view(self) -> np.ndarray:
@@ -169,8 +176,13 @@ class SnakeGameFrontend:
 
     pygame.init()
     self.font = pygame.font.SysFont('arial', 24)
-    self.display = pygame.display.set_mode((game.width * block_size, game.height * block_size))
+    self.display = pygame.display.set_mode((game.width * block_size, game.height * block_size), pygame.RESIZABLE)
     pygame.display.set_caption('Snake')
+
+  def resize(self, new_game: SnakeGame):
+    """Resize the window when the game size changes."""
+    self.game = new_game
+    self.display = pygame.display.set_mode((new_game.width * self.block_size, new_game.height * self.block_size), pygame.RESIZABLE)
 
 
   def render(self):
@@ -202,7 +214,7 @@ class SnakeGameFrontend:
     text = self.font.render(f"Score: {self.game.score}", True, WHITE)
     self.display.blit(text, [4, 4])
 
-    text = self.font.render(f"Reward: {self.game.reward} ({'+' if self.game.reward > 0 else ''}{abs(self.game.reward):.2f})", True, GREEN1 if self.game.score >= 0 else RED)
+    text = self.font.render(f"Reward: {self.game.reward} ({'+' if self.game.step_reward > 0 else ''}{self.game.step_reward:.2f})", True, GREEN1 if self.game.reward >= 0 else RED)
     self.display.blit(text, [4, 28])
 
     if self.game.is_game_over():
@@ -221,6 +233,11 @@ class SnakeGameFrontend:
       if event.type == pygame.QUIT:
         pygame.quit()
         quit()
+
+      if event.type == pygame.VIDEORESIZE:
+        # Handle window resize events
+        self.display = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+        continue
 
       if event.type != pygame.KEYDOWN:
         continue
@@ -286,11 +303,11 @@ if __name__ == '__main__':
   # game loop
   while True:
     frontend.handle_user_input()
-    ate_food, game_over = game.step()
+    reward, game_over, score = game.step()
     frontend.render()
 
     if game_over:
-      # print('Score', score)
+      print('Score', score)
       time.sleep(.75)
       game.reset()
 
