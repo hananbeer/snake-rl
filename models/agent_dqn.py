@@ -14,8 +14,6 @@ from .qtrainer import QTrainer
 
 import signals
 
-import helper
-
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
 LR = 0.001
@@ -124,6 +122,27 @@ class Agent:
     self.target_model.load_state_dict(self.model.state_dict())
     self.target_model.eval()
 
+import matplotlib.pyplot as plt
+from IPython import display
+
+plt.ion()
+
+def plot_scores(scores, mean_scores):
+    display.clear_output(wait=True)
+    plt.clf()
+    plt.title('Training...')
+    plt.xlabel('Number of Games')
+    plt.ylabel('Score')
+    plt.bar(range(len(scores)), scores, alpha=0.6, label='Score')
+    plt.plot(mean_scores, color='orange', label='Mean Score')
+    plt.legend(loc='upper left')
+    plt.ylim(ymin=0)
+    plt.text(len(scores)-1, scores[-1], f'{scores[-1]} ({max(scores)})')
+    plt.text(len(mean_scores)-1, mean_scores[-1], str(mean_scores[-1]))
+    plt.show(block=False)
+    plt.pause(.01)
+
+
 
 def train(render: bool):
   plot_scores = []
@@ -203,7 +222,21 @@ def train(render: bool):
       total_score += score
       mean_score = total_score / agent.n_games
       plot_mean_scores.append(mean_score)
-      helper.plot(plot_scores, plot_mean_scores)
+
+      display.clear_output(wait=True)
+      plt.clf()
+      plt.title('Training...')
+      plt.xlabel('Number of Games')
+      plt.ylabel('Score')
+      plt.bar(range(len(scores)), scores, alpha=0.6, label='Score')
+      plt.plot(mean_scores, color='orange', label='Mean Score')
+      plt.legend(loc='upper left')
+      plt.ylim(ymin=0)
+      plt.text(len(scores)-1, scores[-1], f'{scores[-1]} ({max(scores)})')
+      plt.text(len(mean_scores)-1, mean_scores[-1], str(mean_scores[-1]))
+      plt.show(block=False)
+      plt.pause(.01)
+
 
       plot_scores = plot_scores[-200:]
       plot_mean_scores = plot_mean_scores[-200:]

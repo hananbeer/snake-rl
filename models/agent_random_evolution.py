@@ -8,7 +8,8 @@ from collections import deque
 import sys
 import os
 
-from game import SnakeGame, SnakeGameAI, SnakeGameFrontend, SnakeGameMatplotlibFrontend, Point, Vector
+from game import SnakeGame, SnakeGameAI, Point, Vector
+from game_frontend_matplotlib import SnakeGameMatplotlibFrontend
 from .model_simple_layernorm import ModelSimpleLayerNorm
 # from .qtrainer_simple import QTrainerSimple
 from .qtrainer import QTrainer
@@ -16,8 +17,6 @@ from .model_visualizer import ModelVisualizer
 from .signal_visualizer import SignalVisualizer
 
 import signals
-
-import helper
 
 MAX_MEMORY = 100_000
 BATCH_SIZE = 1000
@@ -243,7 +242,7 @@ def train(render: bool, population_size=150, num_generations=100, elite_size=15,
 
       # VISUAL HERE:
       # Visualize signals for the best agent
-      if signal_visualizer and False:
+      if signal_visualizer:# and False:
         # Use SnakeGameAI to enable grid visualization
         best_game = SnakeGameAI(game.width, game.height, seed=render_seed)
         best_game.reset()

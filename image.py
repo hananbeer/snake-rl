@@ -31,8 +31,10 @@ def get_img_slice_padded(img: np.ndarray, x: int, y: int, slice_width: int, slic
 
   target_x = x1 - x
   target_y = y1 - y
+  extracted_width = x2 - x1
+  extracted_height = y2 - y1
   slice_img = np.zeros((slice_height, slice_width, channels))
-  slice_img[target_y:target_y + slice_height, target_x:target_x + slice_width] = img[y1:y2, x1:x2]
+  slice_img[target_y:target_y + extracted_height, target_x:target_x + extracted_width] = img[y1:y2, x1:x2]
 
   return slice_img
 
@@ -59,12 +61,10 @@ def get_lod_heatmaps(img: np.ndarray, x: int, y: int, kernel_size: int = 5, lod:
     #   chunk_size += 1
 
     img_slice = get_img_slice_padded(img, *cs2xywh(x, y, chunk_size))
-    slice_images.append(img_slice)
-
     heatmap = get_heatmap(img_slice, kernel_size, guassian_strength)
     heatmaps.append(heatmap)
 
-  return heatmaps, slice_images
+  return heatmaps
 
 def get_log_image(img: np.ndarray, x: int, y: int, kernel_size: int = 5, lod: int = 4, scale_factor: float = 2):
   """
@@ -77,7 +77,7 @@ def get_log_image(img: np.ndarray, x: int, y: int, kernel_size: int = 5, lod: in
     if chunk_size % 2 == 0:
       chunk_size += 1
 
-    resized_img, sliced_img = get_lod_heatmaps(img, x, y, chunk_size, guassian_strength)
+    resized_img = get_lod_heatmaps(img, x, y, chunk_size, guassian_strength)
     resized_images.append(resized_img)
 
     kernel_size += 4
@@ -93,17 +93,21 @@ def process_and_show_image(image_path):
   img = plt.imread(image_path)
   img = img.astype(np.float32)
 
-  lod = 4
+  lod = 5
   kernel_size = 9
   scale_factor = 3
   guassian_strength = 1
   # x, y = img.shape[1] // 2, img.shape[0] // 2
   x, y = 250, 500
 
-  # kernel_size = 128
   # padded_slice = get_img_slice_padded(img, *cs2xywh(x, y, kernel_size))
-  # heatmap = get_heatmap(padded_slice, kernel_size = 11, guassian_strength = 15)
-  # # resized_img = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+  heatmap = get_heatmap(img, kernel_size = 29, guassian_strength = 1)
+
+  plt.imshow(heatmap)
+  plt.show()
+  return
+
+  # resized_img = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
 
   # fig, axs = plt.subplots(1, 2, figsize=(10, 5))
   # axs[0].imshow(padded_slice)  # show original
@@ -135,4 +139,4 @@ def process_and_show_image(image_path):
   plt.show()
 
 if __name__ == "__main__":
-  process_and_show_image("img2.png")
+  process_and_show_image("a.png")
