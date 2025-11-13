@@ -19,7 +19,6 @@ GRAY = (100, 100, 100)
 class SnakeGameMatplotlibFrontend:
   def __init__(self, game: SnakeGame, tick_rate: float = 0, games: Optional[List[SnakeGame]] = None, play_mode: str = 'absolute'):
     self.game = game
-    self.games = games if games is not None else [game]
     self.tick_rate = tick_rate
     self.play_mode = play_mode
     self.key_pressed = None
@@ -33,11 +32,6 @@ class SnakeGameMatplotlibFrontend:
     # Initialize matplotlib figure
     plt.ion()  # Turn on interactive mode
     self.fig, self.ax = plt.subplots(figsize=(8, 8))
-    try:
-      self.fig.canvas.set_window_title('Snake Game')
-    except AttributeError:
-      # Some backends don't support set_window_title
-      pass
     self.ax.set_title('Snake Game', fontsize=16, fontweight='bold')
     self.ax.set_aspect('equal')
     self.ax.set_xticks([])
@@ -46,9 +40,10 @@ class SnakeGameMatplotlibFrontend:
     
     # Create initial empty grid for the image (will be updated with set_data)
     initial_grid = np.zeros((game.height, game.width), dtype=int)
-    self.im = self.ax.imshow(initial_grid, cmap=self.cmap, vmin=0, vmax=2, 
+    self.im = self.ax.imshow(initial_grid, vmin=0, vmax=2, 
                             interpolation='nearest', origin='upper', 
-                            animated=True)
+                            animated=True,
+                            cmap='viridis')
     
     # Disable autoscaling for better performance
     self.ax.set_autoscale_on(False)
@@ -96,55 +91,15 @@ class SnakeGameMatplotlibFrontend:
         grid[pt.x, pt.y] = 1
     
     # Mark food position
-    if 0 <= game.food.x < game.width and 0 <= game.food.y < game.height:
-      grid[game.food.x, game.food.y] = 2
-    
-    return grid
-
-  def _games_to_average_grid(self) -> np.ndarray:
-    """Convert multiple games to average grid visualization."""
-    snake_grid = np.zeros((self.game.width, self.game.height), dtype=float)
-    food_grid = np.zeros((self.game.width, self.game.height), dtype=float)
-    
-    # Count occurrences at each position
-    for game in self.games:
-      # Count snake segments
-      for i, pt in enumerate(game.snake):
-        if 0 <= pt.x < self.game.width and 0 <= pt.y < self.game.height:
-          # Weight head more than tail
-          weight = 1.0 - (i / max(len(game.snake), 1)) * 0.5
-          snake_grid[pt.x, pt.y] += weight
-      
-      # Count food
-      if 0 <= game.food.x < self.game.width and 0 <= game.food.y < self.game.height:
-        food_grid[game.food.x, game.food.y] += 1.0
-    
-    # Normalize
-    max_snake = max(snake_grid.max(), 1.0)
-    max_food = max(food_grid.max(), 1.0)
-    
-    # Create combined grid (prioritize food over snake)
-    grid = np.zeros((self.game.width, self.game.height), dtype=int)
-    
-    # Mark food positions (with intensity)
-    for x in range(self.game.width):
-      for y in range(self.game.height):
-        if food_grid[x, y] > 0:
-          grid[x, y] = 2
-        elif snake_grid[x, y] > 0:
-          grid[x, y] = 1
+    # if 0 <= game.food.x < game.width and 0 <= game.food.y < game.height:
+    grid[game.food.x, game.food.y] = 2
     
     return grid
 
   def render(self):
     """Render the game state using matplotlib."""
     # Update grid data
-    if len(self.games) > 1:
-      # Render average of multiple games
-      grid = self._games_to_average_grid()
-    else:
-      # Render single game
-      grid = self._game_to_grid(self.game)
+    grid = self._game_to_grid(self.game)
     
     # Transpose for correct orientation (matplotlib uses (y, x) convention)
     # We want x on horizontal axis, y on vertical axis
@@ -154,16 +109,10 @@ class SnakeGameMatplotlibFrontend:
     self.im.set_data(display_grid)
     
     # Update score and reward text
-    if len(self.games) > 1:
-      avg_score = sum(g.score for g in self.games) / len(self.games)
-      avg_reward = sum(g.reward for g in self.games) / len(self.games)
-      info_text = f"Avg Score: {avg_score:.1f} ({len(self.games)} agents)\nAvg Reward: {avg_reward:.1f}"
-      color = 'green' if avg_reward >= 0 else 'red'
-    else:
-      info_text = f"Score: {self.game.score}\nReward: {self.game.reward}"
-      if self.game.step_reward != 0:
-        info_text += f" ({'+' if self.game.step_reward > 0 else ''}{self.game.step_reward:.2f})"
-      color = 'green' if self.game.reward >= 0 else 'red'
+    info_text = f"Score: {self.game.score}\nReward: {self.game.reward}"
+    if self.game.step_reward != 0:
+      info_text += f" ({'+' if self.game.step_reward > 0 else ''}{self.game.step_reward:.2f})"
+    color = 'green' if self.game.reward >= 0 else 'red'
     
     # Update or create info text
     if self.info_text_obj is None:
@@ -175,17 +124,17 @@ class SnakeGameMatplotlibFrontend:
       self.info_text_obj.set_color(color)
     
     # Update game over text
-    is_game_over = len(self.games) == 1 and self.game.is_game_over()
-    if is_game_over:
+    if self.game.is_game_over():
       if self.game_over_text_obj is None:
         self.game_over_text_obj = self.ax.text(0.5, 0.5, 'GAME OVER', transform=self.ax.transAxes,
                                               fontsize=24, fontweight='bold', color='red',
                                               ha='center', va='center',
                                               bbox=dict(boxstyle='round', facecolor='black', alpha=0.8))
+      else:
+        self.game_over_text_obj.set_visible(True)
     else:
       if self.game_over_text_obj is not None:
-        self.game_over_text_obj.remove()
-        self.game_over_text_obj = None
+        self.game_over_text_obj.set_visible(False)
     
     # Use draw_idle for non-blocking updates (much faster than draw())
     # Only flush events if we need to process input
@@ -211,41 +160,17 @@ class SnakeGameMatplotlibFrontend:
 
   def _on_key_press(self, event):
     """Handle key press events from matplotlib."""
-    if event.key is None:
+    if event.key is None or self.key_pressed:
       return
     
     key = event.key.lower()
-    self.key_pressed = key
     
     # Handle quit
     if key == 'q' or key == 'escape':
       self.quit_requested = True
       return
     
-    # Handle arrow keys (different backends use different names)
-    if key in ['left', 'arrowleft']:
-      key = 'left'
-    elif key in ['right', 'arrowright']:
-      key = 'right'
-    elif key in ['up', 'arrowup']:
-      key = 'up'
-    elif key in ['down', 'arrowdown']:
-      key = 'down'
-    
-    if self.play_mode == 'absolute':
-      if key == 'left' and self.game.direction != Vector(1, 0):
-        self.game.direction = Vector(-1, 0)
-      elif key == 'right' and self.game.direction != Vector(-1, 0):
-        self.game.direction = Vector(1, 0)
-      elif key == 'up' and self.game.direction != Vector(0, 1):
-        self.game.direction = Vector(0, -1)
-      elif key == 'down' and self.game.direction != Vector(0, -1):
-        self.game.direction = Vector(0, 1)
-    elif self.play_mode == 'relative':
-      if key == 'left':
-        self.game.direction = self.game.get_relative_direction('left')
-      elif key == 'right':
-        self.game.direction = self.game.get_relative_direction('right')
+    self.key_pressed = key.replace('arrow', '')
 
   def _on_close(self, event):
     """Handle window close event."""
@@ -263,6 +188,24 @@ class SnakeGameMatplotlibFrontend:
       self.close()
       return True
     
+    key = self.key_pressed
+    if self.play_mode == 'absolute':
+      if key == 'left' and self.game.direction != Vector(1, 0):
+        self.game.direction = Vector(-1, 0)
+      elif key == 'right' and self.game.direction != Vector(-1, 0):
+        self.game.direction = Vector(1, 0)
+      elif key == 'up' and self.game.direction != Vector(0, 1):
+        self.game.direction = Vector(0, -1)
+      elif key == 'down' and self.game.direction != Vector(0, -1):
+        self.game.direction = Vector(0, 1)
+    elif self.play_mode == 'relative':
+      if key == 'left':
+        self.game.direction = self.game.get_relative_direction('left')
+      elif key == 'right':
+        self.game.direction = self.game.get_relative_direction('right')
+
+    self.key_pressed = None
+
     return False
 
   def close(self):
