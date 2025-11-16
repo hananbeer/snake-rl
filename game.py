@@ -12,11 +12,12 @@ Point = namedtuple('Point', 'x, y')
 Vector = namedtuple('Vector', 'x, y')
 
 class SnakeGame:
-  def __init__(self, width: int, height: int, seed: Optional[int] = None):
+  def __init__(self, width: int, height: int, seed: Optional[int] = None, allow_teleport: bool = False):
     self.width = width
     self.height = height
     self.seed = seed
     self.rng = random.Random(seed) if seed is not None else random
+    self.allow_teleport = allow_teleport
     self.reset()
 
 
@@ -91,68 +92,130 @@ class SnakeGame:
       raise ValueError(f"Invalid relative direction: {relative}")
 
 
-  def step(self) -> Tuple[bool, int]:
-    self.step_reward = 0
+  def teleport(self, pt: Point) -> Point:
+    return Point((pt.x + self.width) % self.width, (pt.y + self.height) % self.height)
 
-    # Get next head position
+
+  def advance_head(self) -> Point:
     next_head = self.get_next_position(self.head, self.direction)
-    ate_food = (next_head == self.food)
-    if not ate_food:
-      self.snake.pop()
-      if (next_head.x == self.food.x or next_head.y == self.food.y) and not (self.head.x == self.food.x or self.head.y == self.food.y):
-        self.step_reward += 1
-      elif not (next_head.x == self.food.x or next_head.y == self.food.y) and (self.head.x == self.food.x or self.head.y == self.food.y):
-        self.step_reward -= 5
-
-      # dist = math.sqrt((next_head.x - self.food.x) ** 2 + (next_head.y - self.food.y) ** 2)
-      # self.step_reward -= dist - 5
-    else:
-      self.food = self.make_food()
-      self.score += 1
-      self.step_reward += 50
+    if self.allow_teleport:
+      next_head = self.teleport(next_head)
 
     self.snake.insert(0, next_head)
+    return next_head
+
+
+  def pop_tail(self):
+    self.snake.pop()
+
+
+  def step(self) -> Tuple[bool, int]:
+    next_head = self.advance_head()
+
+    ate_food = (next_head == self.food)
+    if ate_food:
+      self.food = self.make_food()
+    else:
+      self.pop_tail()
 
     is_game_over = self.is_game_over()
-    if is_game_over:
-      self.step_reward -= 20
+    return ate_food, is_game_over
 
-    self.reward += self.step_reward
-    return self.step_reward, is_game_over, self.score
+def fixed_view(arr: np.ndarray, x: int, y: int, view_width: int, view_height: int, default_value = np.nan) -> np.ndarray:
+  """
+  @param arr: the array to get the view of
+  @param x: the x coordinate of the top left corner of the view
+  @param y: the y coordinate of the top left corner of the view
+  @param view_width: the width of the view
+  @param view_height: the height of the view
+  @param default_value: the value to fill the view with if the view is out of bounds
+  @return: a fixed size view of an array
+  """
+  arr_height, arr_width = arr.shape
+  x1 = max(x, 0)
+  y1 = max(y, 0)
+  x2 = min(x + view_width, arr_width)
+  y2 = min(y + view_height, arr_height)
+
+  target_x = x1 - x
+  target_y = y1 - y
+  extracted_width = x2 - x1
+  extracted_height = y2 - y1
+
+  view = np.full((view_height, view_width), default_value)
+  view[target_y:target_y + extracted_height, target_x:target_x + extracted_width] = arr[y1:y2, x1:x2]
+
+  return view
+
+def wrapped_view(arr: np.ndarray, x: int, y: int, view_width: int, view_height: int) -> np.ndarray:
+  """
+  @param arr: the array to get the view of
+  @param x: the x coordinate of the top left corner of the view
+  @param y: the y coordinate of the top left corner of the view
+  @param view_width: the width of the view
+  @param view_height: the height of the view
+  @return: a fixed size view of an array
+  """
+  arr_height, arr_width = arr.shape
+  half_height = view_height // 2
+  half_width = view_width // 2
+  view = np.zeros((view_height, view_width), dtype=arr.dtype)
+  for dy in range(view_height):
+    for dx in range(view_width):
+      arr_y = (y + dy - half_height) % arr_height
+      arr_x = (x + dx - half_width) % arr_width
+      view[dy, dx] = arr[arr_y, arr_x]
+
+  return view
+
 
 class SnakeGameAI(SnakeGame):
   def world_view(self) -> np.ndarray:
     grid = np.zeros((self.width, self.height), dtype=int)
-    for pt in self.snake:
-      grid[pt.x, pt.y] = 1
-    grid[self.food.x, self.food.y] = 2
+    for pt in self.snake[1:]:
+      grid[pt.y, pt.x] = 1
+
+    grid[self.head.y, self.head.x] = 2
+    grid[self.food.y, self.food.x] = 3
     return grid
 
-  def local_view(self, head: Point) -> np.ndarray:
-    grid = np.zeros((self.block_size, self.block_size), dtype=int)
+  def local_view(self, block_size: int = 5) -> np.ndarray:
+    world = self.world_view()
+    block_half = block_size // 2
+    local = fixed_view(world, self.head.x - block_half, self.head.y - block_half, block_size, block_size)
 
-    # Define rotation matrix based on self.direction
-    # Up (0,-1), Right (1,0), Down (0,1), Left (-1,0)
-    # Reference (snake head always faces "up" in local view)
-    direction = self.direction
-    # Normalize
-    dir_map = {(0, -1): 0, (1, 0): 1, (0, 1): 2, (-1, 0): 3}
-    rotate = dir_map.get((direction.x, direction.y), 0)
+    # Determine the number of CCW 90-degree rotations to align self.direction to up (0, -1)
+    rotation_map = {
+        (0, -1): 0,   # Up: no rotation
+        (-1, 0): 1,   # Left: rotate 90° CCW
+        (0, 1): 2,    # Down: rotate 180°
+        (1, 0): 3,    # Right: rotate 270° CCW
+    }
+    dir_tuple = (self.direction.x, self.direction.y)
+    k = rotation_map.get(dir_tuple, 0)
+    local = np.rot90(local, k)
 
-    # Function to rotate relative coordinates (dx, dy) according to self.direction
-    def rotate_xy(dx, dy, rot):
-      # rot: 0 = up, 1 = right, 2 = down, 3 = left (counterclockwise)
-      for _ in range(rot):
-        dx, dy = -dy, dx
-      return dx, dy
+    return local
 
-    for pt in self.snake:
-      dx = pt.x - head.x
-      dy = pt.y - head.y
-      rel_x, rel_y = rotate_xy(dx, dy, rotate)
-      loc_x = rel_x + self.block_size // 2
-      loc_y = rel_y + self.block_size // 2
-      if 0 <= loc_x < self.block_size and 0 <= loc_y < self.block_size:
-        grid[loc_x, loc_y] = 1
+  def wrapped_view(self, x: int, y: int, block_size: int = 5) -> np.ndarray:
+    world = self.world_view()
+    return wrapped_view(world, x, y, block_size, block_size)
 
-    return grid
+  def step(self):
+    self.step_reward = 0
+
+    prev_head = self.head
+    ate_food, is_game_over = super().step()
+
+    if ate_food:
+      self.score += 1
+      self.step_reward += 50
+    else:
+      # dist = math.sqrt((next_head.x - self.food.x) ** 2 + (next_head.y - self.food.y) ** 2)
+      # self.step_reward -= dist - 5
+      if (self.head.x == self.food.x or self.head.y == self.food.y) and not (prev_head.x == self.food.x or prev_head.y == self.food.y):
+        self.step_reward += 1
+      elif not (prev_head.x == self.food.x or prev_head.y == self.food.y) and (self.head.x == self.food.x or self.head.y == self.food.y):
+        self.step_reward -= 5
+
+    return ate_food, is_game_over
